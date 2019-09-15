@@ -74,93 +74,82 @@ data:
 {{ .Values.extraEntries.filter | indent 8 }}
 
   fluent-bit-output.conf: |-
-{{ if eq .Values.backend.type "test" }}
+{{- range .Values.outputs }}
     [OUTPUT]
-        Name  file
-        Match *
-        Path /tmp/fluent-bit.log
-{{ else if eq .Values.backend.type "forward" }}
-    [OUTPUT]
-        Name          forward
-        Match         *
-        Host          {{ .Values.backend.forward.host }}
-        Port          {{ .Values.backend.forward.port }}
+        Name {{ .type }}
+        Match {{ .match | default "*" }}
+{{- if eq .type "test" }}
+        Path {{ .path | default "/tmp/fluent-bit.log" }}
+{{- else if eq .type "forward" }}
+        Host          {{ .host }}
+        Port          {{ .port }}
         Retry_Limit False
-{{- if .Values.backend.forward.shared_key }}
-        Shared_Key    {{ .Values.backend.forward.shared_key }}
+{{- if .shared_key }}
+        Shared_Key    {{ .shared_key }}
 {{- end }}
-{{ else if eq .Values.backend.type "es" }}
-    [OUTPUT]
-        Name  es
-        Match *
-        Host  {{ .Values.backend.es.host }}
-        Port  {{ .Values.backend.es.port }}
-        Logstash_Format {{ default "On" .Values.backend.es.logstash_format  }}
+{{- else if eq .type "es" }}
+        Host  {{ .host }}
+        Port  {{ .port }}
+        Logstash_Format {{ default "On" .logstash_format  }}
         Retry_Limit False
-        Type  {{ .Values.backend.es.type }}
-{{- if .Values.backend.es.time_key }}
-        Time_Key {{ .Values.backend.es.time_key }}
+        Type  {{ .type }}
+{{- if .time_key }}
+        Time_Key {{ .time_key }}
 {{- end }}
-{{- if .Values.backend.es.replace_dots }}
-        Replace_Dots {{ .Values.backend.es.replace_dots }}
+{{- if .replace_dots }}
+        Replace_Dots {{ .replace_dots }}
 {{- end }}
-{{- if .Values.backend.es.logstash_prefix }}
-        Logstash_Prefix {{ .Values.backend.es.logstash_prefix }}
-{{ else if .Values.backend.es.index }}
-        Index {{ .Values.backend.es.index }}
+{{- if .logstash_prefix }}
+        Logstash_Prefix {{ .logstash_prefix }}
+{{ else if .index }}
+        Index {{ .index }}
 {{- end }}
-{{- if .Values.backend.es.http_user }}
-        HTTP_User {{ .Values.backend.es.http_user }}
-{{- if .Values.backend.es.http_passwd }}
-        HTTP_Passwd {{ .Values.backend.es.http_passwd }}
+{{- if .http_user }}
+        HTTP_User {{ .http_user }}
+{{- if .http_passwd }}
+        HTTP_Passwd {{ .http_passwd }}
 {{- else }}
         HTTP_Passwd ${HTTP_PASSWORD}
 {{- end }}
 {{- end }}
-{{if eq .Values.backend.es.tls "on" }}
-        tls {{ .Values.backend.es.tls }}
-        tls.verify {{ .Values.backend.es.tls_verify }}
-        tls.debug {{ .Values.backend.es.tls_debug }}
-{{- if .Values.backend.es.tls_ca }}
+{{ if eq .tls "on" }}
+        tls {{ .tls }}
+        tls.verify {{ .tls_verify }}
+        tls.debug {{ .tls_debug }}
+{{- if .tls_ca }}
         tls.ca_file /secure/es-tls-ca.crt
 {{- end }}
 {{- end }}
-{{ else if eq .Values.backend.type "splunk" }}
-    [OUTPUT]
-        Name  splunk
-        Match *
-        Host  {{ .Values.backend.splunk.host }}
-        Port  {{ .Values.backend.splunk.port }}
-        Splunk_Token  {{ .Values.backend.splunk.token }}
-        Splunk_Send_Raw {{ .Values.backend.splunk.send_raw}}
-        TLS   {{ .Values.backend.splunk.tls }}
-        TLS.Verify   {{ .Values.backend.splunk.tls_verify }}
-        tls.debug {{ .Values.backend.splunk.tls_debug }}
-        Message_Key   {{ .Values.backend.splunk.message_key }}
-{{ else if eq .Values.backend.type "http" }}
-    [OUTPUT]
-        Name  http
-        Match *
-        Host {{ .Values.backend.http.host }}
-        Port {{ .Values.backend.http.port }}
-        URI {{ .Values.backend.http.uri }}
-{{- if .Values.backend.http.http_user }}
-        HTTP_User {{ .Values.backend.http.http_user }}
-        HTTP_Passwd {{ .Values.backend.http.http_passwd }}
+{{- else if eq .type "splunk" }}
+        Host  {{ .host }}
+        Port  {{ .port }}
+        Splunk_Token  {{ .token }}
+        Splunk_Send_Raw {{ .send_raw }}
+        TLS   {{ .tls }}
+        TLS.Verify   {{ .tls_verify }}
+        tls.debug {{ .tls_debug }}
+        Message_Key   {{ .message_key }}
+{{- else if eq .type "http" }}
+        Host {{ .host }}
+        Port {{ .port }}
+        URI {{ .uri }}
+{{- if .http_user }}
+        HTTP_User {{ .http_user }}
+        HTTP_Passwd {{ .http_passwd }}
 {{- end }}
-        tls {{ .Values.backend.http.tls }}
-        tls.verify {{ .Values.backend.http.tls_verify }}
-        tls.debug {{ .Values.backend.http.tls_debug }}
-{{- if .Values.backend.http.proxy }}
-        Proxy {{ .Values.backend.http.proxy }}
+        tls {{ .tls }}
+        tls.verify {{ .tls_verify }}
+        tls.debug {{ .tls_debug }}
+{{- if .proxy }}
+        Proxy {{ .proxy }}
 {{- end }}
-        Format {{ .Values.backend.http.format }}
-{{- end }}
-{{- range  .Values.backend.http.headers }}
+        Format {{ .format }}
+{{ end }}
+{{- range .headers }}
         Header  {{ . }}
 {{- end }}
-{{ .Values.extraEntries.output | indent 8 }}
-
+{{ .extraEntries | default "" | indent 8 }}
+{{- end }}
 
   fluent-bit.conf: |-
 {{ .Values.rawConfig | indent 4 }}

@@ -29,54 +29,55 @@ The following table lists the configurable parameters of the Fluent-Bit chart an
 
 | Parameter                  | Description                        | Default                 |
 | -----------------------    | ---------------------------------- | ----------------------- |
-| **Backend Selection**      |
-| `backend.type`             | Set the backend to which Fluent-Bit should flush the information it gathers | `forward` |
-| **Forward Backend**        |
-| `backend.forward.host`     | Target host where Fluent-Bit or Fluentd are listening for Forward messages | `fluentd` |
-| `backend.forward.port`     | TCP Port of the target service | `24284` |
-| `backend.forward.shared_key`       | A key string known by the remote Fluentd used for authorization. | `` |
-| `backend.forward.tls`              | Enable or disable TLS support | `off` |
-| `backend.forward.tls_verify`       | Force certificate validation  | `on` |
-| `backend.forward.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
-| **ElasticSearch Backend**  |
-| `backend.es.host`          | IP address or hostname of the target Elasticsearch instance | `elasticsearch` |
-| `backend.es.port`          | TCP port of the target Elasticsearch instance. | `9200` |
-| `backend.es.index`         | Elastic Index name | `kubernetes_cluster` |
-| `backend.es.type`          | Elastic Type name | `flb_type` |
-| `backend.es.time_key`          | Elastic Time Key | `@timestamp` |
-| `backend.es.logstash_format`          | Enable Logstash format compatibility. | `On` |
-| `backend.es.logstash_prefix`  | Index Prefix. If Logstash_Prefix is equals to 'mydata' your index will become 'mydata-YYYY.MM.DD'. | `kubernetes_cluster` |
-| `backend.es.replace_dots`     | Enable/Disable Replace_Dots option. | `On` |
-| `backend.es.http_user`        | Optional username credential for Elastic X-Pack access. | `` |
-| `backend.es.http_passwd`      | Password for user defined in HTTP_User. | `` |
-| `backend.es.http_passwd_secret`     | Secret name for password for user defined in HTTP_User. | `` |
-| `backend.es.http_passwd_secret_key` | Secret key for password for user defined in HTTP_User. | `` |
-| `backend.es.tls`              | Enable or disable TLS support | `off` |
-| `backend.es.tls_verify`       | Force certificate validation  | `on` |
-| `backend.es.tls_secret`        | Existing secret storing TLS CA certificate for the Elastic instance. Specify if tls: on. Overrides `backend.es.tls_ca` | `` |
-| `backend.es.tls_secret_ca_key` | Existing secret key storing TLS CA certificate for the Elastic instance. Specify if tls: on.                           | `` |
-| `backend.es.tls_ca`           | TLS CA certificate for the Elastic instance (in PEM format). Specify if tls: on. | `` |
-| `backend.es.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
-| **HTTP Backend**              |
-| `backend.http.host`           | IP address or hostname of the target HTTP Server | `127.0.0.1` |
-| `backend.http.port`           | TCP port of the target HTTP Server | `80` |
-| `backend.http.uri`            | Specify an optional HTTP URI for the target web server, e.g: /something | `"/"`
-| `backend.http.http_user`        | Optional username credential for Basic Authentication. | `` |
-| `backend.http.http_passwd:`     | Password for user defined in HTTP_User. | `` |
-| `backend.http.format`         | Specify the data format to be used in the HTTP request body, by default it uses msgpack, optionally it can be set to json.  | `msgpack` |
-| `backend.http.headers`          | HTTP Headers | `[]` |
-| `backend.http.tls`              | Enable or disable TLS support | `off` |
-| `backend.http.tls_verify`       | Force certificate validation  | `on` |
-| `backend.http.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
-| **Splunk Backend**              |
-| `backend.splunk.host`           | IP address or hostname of the target Splunk Server | `127.0.0.1` |
-| `backend.splunk.port`           | TCP port of the target Splunk Server | `8088` |
-| `backend.splunk.token`            | Specify the Authentication Token for the HTTP Event Collector interface. | `` |
-| `backend.splunk.send_raw`         | If enabled, record keys and values are set in the main map. | `off` |
-| `backend.splunk.tls`           | Enable or disable TLS support | `on` |
-| `backend.splunk.tls_verify`           | Force TLS certificate validation | `off` |
-| `backend.splunk.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
-| `backend.splunk.message_key`           | Tag applied to all incoming logs | `kubernetes` |
+| **Output Selection**      |
+| `outputs.*.type`             | Set the output to which Fluent-Bit should flush the information it gathers | `forward` |
+| `outputs.*.extraEntries`              |   Extra entries for a given [OUPUT] section                     | ``                    |
+| **Forward Output (`outputs.*.type` == "forward")**        |
+| `outputs.*.host`     | Target host where Fluent-Bit or Fluentd are listening for Forward messages | `fluentd` |
+| `outputs.*.port`     | TCP Port of the target service | `24284` |
+| `outputs.*.shared_key`       | A key string known by the remote Fluentd used for authorization. | `` |
+| `outputs.*.tls`              | Enable or disable TLS support | `off` |
+| `outputs.*.tls_verify`       | Force certificate validation  | `on` |
+| `outputs.*.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
+| **ElasticSearch Output (`outputs.*.type` == "es")**  |
+| `outputs.*.host`          | IP address or hostname of the target Elasticsearch instance | `elasticsearch` |
+| `outputs.*.port`          | TCP port of the target Elasticsearch instance. | `9200` |
+| `outputs.*.index`         | Elastic Index name | `kubernetes_cluster` |
+| `outputs.*.type`          | Elastic Type name | `flb_type` |
+| `outputs.*.time_key`          | Elastic Time Key | `@timestamp` |
+| `outputs.*.logstash_format`          | Enable Logstash format compatibility. | `On` |
+| `outputs.*.logstash_prefix`  | Index Prefix. If Logstash_Prefix is equals to 'mydata' your index will become 'mydata-YYYY.MM.DD'. | `kubernetes_cluster` |
+| `outputs.*.replace_dots`     | Enable/Disable Replace_Dots option. | `On` |
+| `outputs.*.http_user`        | Optional username credential for Elastic X-Pack access. | `` |
+| `outputs.*.http_passwd`      | Password for user defined in HTTP_User. | `` |
+| `outputs.*.http_passwd_secret`     | Secret name for password for user defined in HTTP_User. | `` |
+| `outputs.*.http_passwd_secret_key` | Secret key for password for user defined in HTTP_User. | `` |
+| `outputs.*.tls`              | Enable or disable TLS support | `off` |
+| `outputs.*.tls_verify`       | Force certificate validation  | `on` |
+| `outputs.*.tls_secret`        | Existing secret storing TLS CA certificate for the Elastic instance. Specify if tls: on. Overrides `outputs.*.es.tls_ca` | `` |
+| `outputs.*.tls_secret_ca_key` | Existing secret key storing TLS CA certificate for the Elastic instance. Specify if tls: on.                           | `` |
+| `outputs.*.tls_ca`           | TLS CA certificate for the Elastic instance (in PEM format). Specify if tls: on. | `` |
+| `outputs.*.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
+| **HTTP Output (`outputs.*.type` == "http")**              |
+| `outputs.*.host`           | IP address or hostname of the target HTTP Server | `127.0.0.1` |
+| `outputs.*.port`           | TCP port of the target HTTP Server | `80` |
+| `outputs.*.uri`            | Specify an optional HTTP URI for the target web server, e.g: /something | `"/"`
+| `outputs.*.http_user`        | Optional username credential for Basic Authentication. | `` |
+| `outputs.*.http_passwd:`     | Password for user defined in HTTP_User. | `` |
+| `outputs.*.format`         | Specify the data format to be used in the HTTP request body, by default it uses msgpack, optionally it can be set to json.  | `msgpack` |
+| `outputs.*.headers`          | HTTP Headers | `[]` |
+| `outputs.*.tls`              | Enable or disable TLS support | `off` |
+| `outputs.*.tls_verify`       | Force certificate validation  | `on` |
+| `outputs.*.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
+| **Splunk Output (`outputs.*.type` == "splunk")**              |
+| `outputs.*.host`           | IP address or hostname of the target Splunk Server | `127.0.0.1` |
+| `outputs.*.port`           | TCP port of the target Splunk Server | `8088` |
+| `outputs.*.token`            | Specify the Authentication Token for the HTTP Event Collector interface. | `` |
+| `outputs.*.send_raw`         | If enabled, record keys and values are set in the main map. | `off` |
+| `outputs.*.tls`           | Enable or disable TLS support | `on` |
+| `outputs.*.tls_verify`           | Force TLS certificate validation | `off` |
+| `outputs.*.tls_debug`        | Set TLS debug verbosity level. It accept the following values: 0-4 | `1` |
+| `outputs.*.message_key`           | Tag applied to all incoming logs | `kubernetes` |
 | **Parsers**                   |
 | `parsers.enabled`                  | Enable custom parsers | `false` |
 | `parsers.regex`                    | List of regex parsers | `NULL` |
@@ -90,7 +91,6 @@ The following table lists the configurable parameters of the Fluent-Bit chart an
 | `existingConfigMap`                | ConfigMap override                         | ``                    |
 | `extraEntries.input`               |    Extra entries for existing [INPUT] section                     | ``                    |
 | `extraEntries.filter`              |    Extra entries for existing [FILTER] section                     | ``                    |
-| `extraEntries.output`              |   Extra entries for existing [OUPUT] section                     | ``                    |
 | `extraPorts`                       | List of extra ports                        |                       |
 | `extraVolumeMounts`                | Mount an extra volume, required to mount ssl certificates when elasticsearch has tls enabled |          |
 | `extraVolume`                      | Extra volume                               |                                                |
