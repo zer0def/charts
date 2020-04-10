@@ -1,11 +1,12 @@
 {{- if .Values.kafkaTrigger.enabled }}
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  labels:
-    kubeless: kafka-trigger-controller
   name: kafka-trigger-controller
   namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "labels.standard" . | indent 4 }}
+    kubeless: kafka-trigger-controller
 spec:
   selector:
     matchLabels:
@@ -14,6 +15,8 @@ spec:
     metadata:
       labels:
         kubeless: kafka-trigger-controller
+        app: {{ template "kubeless.name"  . }}
+        release: {{ .Release.Name | quote }}
     spec:
       containers:
       - image: "{{ .Values.kafkaTrigger.deployment.image.repository }}:{{ .Values.kafkaTrigger.deployment.image.tag }}"
