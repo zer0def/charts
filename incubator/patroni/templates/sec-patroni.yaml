@@ -12,3 +12,29 @@ data:
   password-superuser: {{ .Values.credentials.superuser | b64enc }}
   password-admin: {{ .Values.credentials.admin | b64enc }}
   password-standby: {{ .Values.credentials.standby | b64enc }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" . }}-post-init
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  post_init.sh: {{ include "patroni.post_init_script" . | b64enc }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" . }}-db-users
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  dbs_users: {{ include "patroni.databases" . | b64enc }}

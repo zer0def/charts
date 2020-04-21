@@ -71,8 +71,8 @@ The following table lists the configurable parameters of the patroni chart and t
 | `nameOverride`                    | Override the name of the chart              | `nil`                                               |
 | `fullnameOverride`                | Override the fullname of the chart          | `nil`                                               |
 | `replicaCount`                    | Amount of pods to spawn                     | `5`                                                 |
-| `image.repository`                | The image to pull                           | `registry.opensource.zalan.do/acid/spilo-10`        |
-| `image.tag`                       | The version of the image to pull            | `1.5-p5`                                            |
+| `image.repository`                | The image to pull                           | `registry.opensource.zalan.do/acid/spilo-12`        |
+| `image.tag`                       | The version of the image to pull            | `1.6-p2`                                            |
 | `image.pullPolicy`                | The pull policy                             | `IfNotPresent`                                      |
 | `credentials.superuser`           | Password of the superuser                   | `tea`                                               |
 | `credentials.admin`               | Password of the admin                       | `cola`                                              |
@@ -113,6 +113,7 @@ The following table lists the configurable parameters of the patroni chart and t
 | `rbac.create`                     | Create required role and rolebindings       | `true`                                              |
 | `serviceAccount.create`           | If true, create a new service account	      | `true`                                              |
 | `serviceAccount.name`             | Service account to be used. If not set and `serviceAccount.create` is `true`, a name is generated using the fullname template | `nil` |
+| `databases`                       | List of `{"name": "<db_name>", "user": "<db_user>", "pass": "<user_pass>"}` application database records to bootstrap | `[]` |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 

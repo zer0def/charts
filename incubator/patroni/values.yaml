@@ -119,6 +119,15 @@ rbac:
   # Specifies whether RBAC resources should be created
   create: true
 
+# Mount point for file containing databases and users to create on init
+#dbsUsersMountpoint: /tmp/dbsUsers
+
+# List of application databases, users and passwords to bootstrap
+databases: []
+#- name: db1
+#  user: user1
+#  pass: pass1
+
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
   create: true

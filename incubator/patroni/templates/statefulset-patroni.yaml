@@ -117,6 +117,11 @@ spec:
         {{- end }}
         - name: PGROOT
           value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
@@ -135,6 +140,12 @@ spec:
         - name: storage-volume
           mountPath: "{{ .Values.persistentVolume.mountPath }}"
           subPath: "{{ .Values.persistentVolume.subPath }}"
+        - name: db-users
+          mountPath: {{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}
+          subPath: dbs_users
+        - name: post-init
+          mountPath: /scripts/post_init.sh
+          subPath: post_init.sh
         - mountPath: /etc/patroni
           name: patroni-config
           readOnly: true
@@ -166,6 +177,15 @@ spec:
 {{ tpl .Values.affinityTemplate . | indent 8 }}
     {{- end }}
       volumes:
+      - name: post-init
+        secret:
+          secretName: {{ template "patroni.fullname" . }}-post-init
+          defaultMode: 0555
+          optional: false
+      - name: db-users
+        secret:
+          secretName: {{ template "patroni.fullname" . }}-db-users
+          optional: true
       - name: patroni-config
         secret:
           secretName: {{ template "patroni.fullname" . }}
