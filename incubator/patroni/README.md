@@ -72,7 +72,7 @@ The following table lists the configurable parameters of the patroni chart and t
 | `fullnameOverride`                | Override the fullname of the chart          | `nil`                                               |
 | `replicaCount`                    | Amount of pods to spawn                     | `5`                                                 |
 | `image.repository`                | The image to pull                           | `registry.opensource.zalan.do/acid/spilo-12`        |
-| `image.tag`                       | The version of the image to pull            | `1.6-p2`                                            |
+| `image.tag`                       | The version of the image to pull            | `1.6-p3`                                            |
 | `image.pullPolicy`                | The pull policy                             | `IfNotPresent`                                      |
 | `credentials.superuser`           | Password of the superuser                   | `tea`                                               |
 | `credentials.admin`               | Password of the admin                       | `cola`                                              |
@@ -114,6 +114,7 @@ The following table lists the configurable parameters of the patroni chart and t
 | `serviceAccount.create`           | If true, create a new service account	      | `true`                                              |
 | `serviceAccount.name`             | Service account to be used. If not set and `serviceAccount.create` is `true`, a name is generated using the fullname template | `nil` |
 | `databases`                       | List of `{"name": "<db_name>", "user": "<db_user>", "pass": "<user_pass>"}` application database records to bootstrap | `[]` |
+| `spiloConfiguration`              | [Patroni YAML configuration](https://patroni.readthedocs.io/en/latest/SETTINGS.html) to apply to this release (example [here](https://github.com/zalando/patroni/blob/master/postgres0.yml)) | `{}` |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 

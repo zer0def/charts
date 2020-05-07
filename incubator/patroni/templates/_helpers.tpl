@@ -205,7 +205,7 @@ while IFS= read -r db_name; do
     # ERROR:  could not access file "$libdir/timescaledb-$OLD_VERSION": No such file or directory
     TIMESCALEDB_VERSION=$(echo -e "SELECT NULL;\nSELECT extversion FROM pg_catalog.pg_extension WHERE extname = 'timescaledb'" | psql -tAX -d "${db_name}" 2> /dev/null | tail -n 1)
     if [ "x$TIMESCALEDB_VERSION" != "x" ] && [ "x$TIMESCALEDB_VERSION" != "x$TIMESCALEDB" ] \
-            && [ $PGVER -gt 9 -o "x$TIMESCALEDB_VERSION" != "x$TIMESCALEDB_LEGACY" ]; then
+            && [ $PGVER -gt 11 -o "x$TIMESCALEDB_VERSION" != "x$TIMESCALEDB_LEGACY" ]; then
         echo "ALTER EXTENSION timescaledb UPDATE;"
     fi
     UPGRADE_POSTGIS=$(echo -e "SELECT COUNT(*) FROM pg_catalog.pg_extension WHERE extname = 'postgis'" | psql -tAX -d "${db_name}" 2> /dev/null | tail -n 1)
@@ -226,7 +226,7 @@ GRANT EXECUTE ON FUNCTION public.set_user(text) TO admin;
 GRANT EXECUTE ON FUNCTION public.pg_stat_statements_reset($RESET_ARGS) TO admin;"
     cat metric_helpers.sql
 done < <(psql -d "$2" -tAc 'select pg_catalog.quote_ident(datname) from pg_catalog.pg_database where datallowconn')
-) | psql -a -Xd "$2"
+) | psql -Xd "$2"
 
 [ -f "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}" ] && for i in $(cat "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}"); do
     DATABASE="$(echo ${i} | awk -F: '{print $1}')" USERNAME="$(echo ${i} | awk -F: '{print $2}')" PASSWORD="$(echo ${i} | awk -F: '{print $3}')"
