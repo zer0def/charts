@@ -15,6 +15,10 @@ spec:
     port: 5432
     targetPort: postgresql
     protocol: TCP
+  - name: patroni
+    port: 8008
+    targetPort: patroni
+    protocol: TCP
 ---
 # headless service to manage Endpoints object whose annotations serve as cluster state
 apiVersion: v1
@@ -28,4 +32,10 @@ metadata:
     heritage: {{ .Release.Service }}
     component: cluster-state-lock
 spec:
+  type: ClusterIP
   clusterIP: None
+  ports:
+  - name: patroni
+    port: 8008
+    targetPort: patroni
+    protocol: TCP

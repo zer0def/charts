@@ -130,7 +130,7 @@ spec:
         {{- if .Values.spiloConfiguration }}
         - name: SPILO_CONFIGURATION
           value: |
-            {{ .Values.patroniConfiguration | toYaml | nindent 12 }}
+            {{ .Values.spiloConfiguration | toYaml | nindent 12 }}
         {{- end }}
         {{- if .Values.env }}
         {{- range $key, $val := .Values.env }}
