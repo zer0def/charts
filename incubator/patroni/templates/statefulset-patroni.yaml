@@ -1,31 +1,71 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ template "patroni.fullname" . }}
+  name: {{ template "patroni.hashedname" $ }}
   labels:
     app: {{ template "patroni.fullname" . }}
     chart: {{ template "patroni.chart" . }}
-    release: {{ .Release.Name }}
+    release: {{ template "patroni.hashedname" $ }}
     heritage: {{ .Release.Service }}
+    component: pgsql
 spec:
-  serviceName: {{ template "patroni.fullname" . }}
   replicas: {{ .Values.replicaCount }}
+  serviceName: {{ template "patroni.hashedname" . }}-config
   selector:
     matchLabels:
       app: {{ template "patroni.fullname" . }}
-      release: {{ .Release.Name }}
+      release: {{ template "patroni.hashedname" $ }}
+      component: pgsql
   template:
     metadata:
-      name: {{ template "patroni.fullname" . }}
       labels:
         app: {{ template "patroni.fullname" . }}
-        release: {{ .Release.Name }}
+        release: {{ template "patroni.hashedname" $ }}
+        component: pgsql
     spec:
       serviceAccountName: {{ template "patroni.serviceAccountName" . }}
+      initContainers:
+      - name: wait-for-upgrade-cluster
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command:
+        - '/bin/sh'
+        - '-xc'
+        - |
+          [ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /
+          set -e
+          if [ -n "${CLONE_HOST}" ]; then
+            # if data already exists, we're a replica and don't need to wait
+            [ -f "${PGROOT}/data/global/pg_control" ] && exit 0
+            until /usr/bin/pg_isready -h "${CLONE_HOST}"; do sleep 3; done
+          fi
+        envFrom:
+        - prefix: CLONE_
+          secretRef:
+            name: {{ template "patroni.fullname" $ }}-pgupgrade
+            optional: true
+        env:
+        - name: PGROOT
+          value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "{{ .Values.persistentVolume.mountPath }}"
+          subPath: "{{ .Values.persistentVolume.subPath }}"
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8008
+          protocol: TCP
+        - containerPort: 5432
+          protocol: TCP
+        envFrom:
+        # used only when reinitializing an upgraded cluster
+        - prefix: CLONE_
+          secretRef:
+            name: {{ template "patroni.fullname" $ }}-pgupgrade
+            optional: true
         env:
         - name: PGPASSWORD_SUPERUSER
           valueFrom:
@@ -46,9 +86,9 @@ spec:
         - name: DCS_ENABLE_KUBERNETES_API
           value: "true"
         - name: KUBERNETES_LABELS
-          value: {{ (printf "{ \"app\": \"%s\", \"release\": \"%s\" }" (include "patroni.fullname" .) .Release.Name) | quote }}
+          value: {{ (printf "{ \"app\": \"%s\", \"release\": \"%s\" }" (include "patroni.fullname" .) (include "patroni.hashedname" .)) | quote }}
         - name: KUBERNETES_SCOPE_LABEL
-          value: "app"
+          value: "release"
         {{- if .Values.kubernetes.configmaps.enable }}
         - name: KUBERNETES_USE_CONFIGMAPS
           value: "true"
@@ -80,7 +120,7 @@ spec:
         {{- end }}
         {{- end }}
         - name: SCOPE
-          value: {{ template "patroni.fullname" . }}
+          value: {{ template "patroni.hashedname" $ }}
         {{- if .Values.walE.enable }}
         - name: USE_WALE
           value: {{ .Values.walE.enable | quote }}
@@ -115,8 +155,6 @@ spec:
         - name: USE_WALE
           value: ""
         {{- end }}
-        - name: PGROOT
-          value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
         - name: POD_IP
           valueFrom:
             fieldRef:
@@ -127,6 +165,8 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
+        - name: PGROOT
+          value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
         {{- if .Values.spiloConfiguration }}
         - name: SPILO_CONFIGURATION
           value: |
@@ -134,13 +174,25 @@ spec:
         {{- end }}
         {{- if .Values.env }}
         {{- range $key, $val := .Values.env }}
-        - name: {{  $key | quote | upper }}
+        - name: {{ $key | quote | upper }}
           value: {{ $val | quote }}
         {{- end }}
         {{- end }}
-        ports:
-        - containerPort: 8008
-        - containerPort: 5432
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          exec:
+            command:
+            - "/bin/sh"
+            - "-xec"
+            - "pidof initdb || pidof pg_basebackup || pidof postgres"
+        {{- end }}
+        readinessProbe:
+          exec:
+            command: ["/usr/bin/pg_isready"]
         volumeMounts:
         - name: storage-volume
           mountPath: "{{ .Values.persistentVolume.mountPath }}"
@@ -151,6 +203,11 @@ spec:
         - name: post-init
           mountPath: /scripts/post_init.sh
           subPath: post_init.sh
+{{/*
+        - name: initdb-conf-template
+          mountPath: /usr/share/postgresql/12/postgresql.conf.sample
+          subPath: postgresql.conf.sample
+*/}}
         - mountPath: /etc/patroni
           name: patroni-config
           readOnly: true
@@ -163,6 +220,91 @@ spec:
         {{- end }}
         resources:
 {{ toYaml .Values.resources | indent 10 }}
+    {{- if .Values.metrics.postgresql.enabled }}
+      {{- with .Values.metrics.postgresql }}
+      - name: {{ $.Chart.Name }}-pgsql-exporter
+        args:
+        - "--extend.query-path=/etc/config.yaml"
+        - "--web.listen-address=:{{ .service.port }}"
+        {{- range .extraArgs }}
+        - {{ . | quote }}
+        {{- end }}
+        env:
+        - name: DATA_SOURCE_URI
+          value: "127.0.0.1:5432/postgres"
+        - name: DATA_SOURCE_USER
+          value: "standby"
+        - name: DATA_SOURCE_PASS
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: password-standby
+        image: "{{ .image.registry }}/{{ .image.repository }}:{{ .image.tag }}"
+        imagePullPolicy: {{ .image.pullPolicy }}
+        volumeMounts:
+        - name: pgsql-exporter-queries
+          mountPath: /etc/config.yaml
+          subPath: config.yaml
+        ports:
+        - name: {{ .service.portName }}
+          containerPort: {{ .service.port }}
+          protocol: TCP
+        {{- if .probes.liveness.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: {{ .service.portName }}
+        {{- end }}
+        {{- if .probes.readiness.enabled }}
+        readinessProbe:
+          httpGet:
+            path: /
+            port: {{ .service.portName }}
+        {{- end }}
+        resources:
+{{ toYaml .resources | indent 10 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.metrics.patroni.enabled }}
+      {{- with .Values.metrics.patroni }}
+      - name: {{ $.Chart.Name }}-patroni-exporter
+        {{- if .extraArgs }}
+        args:
+          {{- range .extraArgs }}
+        - {{ . | quote }}
+          {{- end }}
+        {{- end }}
+        image: "{{ .image.registry }}/{{ .image.repository }}:{{ .image.tag }}"
+        imagePullPolicy: {{ .image.pullPolicy }}
+        env:
+        - name: PATRONI_EXPORTER_URL
+          value: "http://127.0.0.1:8008"
+        - name: PATRONI_EXPORTER_PORT
+          value: {{ .service.port | quote }}
+        - name: PATRONI_EXPORTER_REQUEST_VERIFY
+          value: "false"
+        - name: PATRONI_EXPORTER_DEBUG
+          value: "true"
+        ports:
+        - name: {{ .service.portName }}
+          containerPort: {{ .service.port }}
+          protocol: TCP
+        {{- if .probes.liveness.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .service.portName }}
+        {{- end }}
+        {{- if .probes.readiness.enabled }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .service.portName }}
+        {{- end }}
+        resources:
+{{ toYaml .resources | indent 10 }}
+      {{- end }}
+    {{- end }}
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -191,6 +333,12 @@ spec:
         secret:
           secretName: {{ template "patroni.fullname" . }}-db-users
           optional: true
+{{/*
+      - name: initdb-conf-template
+        configMap:
+          name: {{ template "patroni.fullname" . }}-initdb-conf-template
+          optional: false
++*/}}
       - name: patroni-config
         secret:
           secretName: {{ template "patroni.fullname" . }}
@@ -200,6 +348,12 @@ spec:
         secret:
           secretName: {{ .Values.walE.kubernetesSecret }}
       {{- end }}
+      {{- end }}
+      {{- if .Values.metrics.postgresql.enabled }}
+      - name: pgsql-exporter-queries
+        configMap:
+          name: {{ template "patroni.fullname" $ }}-pgsql-exporter-queries
+          defaultMode: 420
       {{- end }}
       {{- if not .Values.persistentVolume.enabled }}
       - name: storage-volume
@@ -215,7 +369,7 @@ spec:
         {{- end }}
         labels:
           app: {{ template "patroni.fullname" . }}
-          release: {{ .Release.Name }}
+          release: {{ template "patroni.hashedname" $ }}
           heritage: {{ .Release.Service }}
       spec:
         accessModes:

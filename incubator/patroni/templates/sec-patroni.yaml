@@ -38,3 +38,61 @@ metadata:
 type: Opaque
 data:
   dbs_users: {{ include "patroni.databases" . | b64enc }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-postgres
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "postgres" | b64enc }}
+  password: {{ .Values.credentials.superuser | b64enc }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-admin
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "admin" | b64enc }}
+  password: {{ .Values.credentials.admin | b64enc }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-standby
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "standby" | b64enc }}
+  password: {{ .Values.credentials.standby | b64enc }}
+{{ range $dbConfig := .Values.databases }}
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: postgresql-{{ template "patroni.hashedname" $ }}-{{ $dbConfig.user | replace "_" "-" }}
+#  labels:
+#    app: {{ template "patroni.fullname" $ }}
+#    chart: {{ template "patroni.chart" $ }}
+#    release: {{ template "patroni.hashedname" $ }}
+#    heritage: {{ $.Release.Service }}
+#type: Opaque
+#data:
+#  username: {{ $dbConfig.user | b64enc }}
+#  password: {{ $dbConfig.pass | b64enc }}
+{{ end }}

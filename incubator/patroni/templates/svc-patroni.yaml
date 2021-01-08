@@ -1,13 +1,14 @@
+# cluster-major-version-specific service
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "patroni.fullname" . }}
+  name: {{ template "patroni.hashedname" . }}
   labels:
     app: {{ template "patroni.fullname" . }}
     chart: {{ template "patroni.chart" . }}
-    release: {{ .Release.Name }}
+    release: {{ template "patroni.hashedname" . }}
     heritage: {{ .Release.Service }}
-    component: access
+    component: pgsql
 spec:
   type: ClusterIP
   ports:
@@ -15,27 +16,18 @@ spec:
     port: 5432
     targetPort: postgresql
     protocol: TCP
-  - name: patroni
-    port: 8008
-    targetPort: patroni
-    protocol: TCP
 ---
 # headless service to manage Endpoints object whose annotations serve as cluster state
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "patroni.fullname" . }}-config
+  name: {{ template "patroni.hashedname" . }}-config
   labels:
     app: {{ template "patroni.fullname" . }}
     chart: {{ template "patroni.chart" . }}
-    release: {{ .Release.Name }}
+    release: {{ template "patroni.hashedname" . }}
     heritage: {{ .Release.Service }}
-    component: cluster-state-lock
+    component: pgsql
 spec:
   type: ClusterIP
   clusterIP: None
-  ports:
-  - name: patroni
-    port: 8008
-    targetPort: patroni
-    protocol: TCP

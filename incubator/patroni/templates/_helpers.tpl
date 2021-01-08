@@ -24,6 +24,10 @@ If release name contains chart name it will be used as a full name.
 {{- end -}}
 {{- end -}}
 
+{{- define "patroni.hashedname" -}}
+{{- printf "%s-%s" .Release.Name (printf "%s:%s" .Values.image.repository .Values.image.tag | sha256sum | trunc 8) -}}
+{{- end -}}
+
 {{/*
 Create chart name and version as used by the chart label.
 */}}
@@ -46,6 +50,33 @@ Create the name of the service account to use.
 {{ range $dbConfig := .Values.databases }}
 {{- printf "%s:%s:%s" $dbConfig.name $dbConfig.user $dbConfig.pass }}
 {{ end }}
+{{- end -}}
+
+{{- define "patroni.pgbouncer" -}}
+[databases]
+* = host={{ template "patroni.hashedname" . }}
+
+[pgbouncer]
+listen_addr = *
+listen_port = 5432
+auth_file = /etc/pgbouncer/userlist.txt
+auth_type = md5
+auth_user = pgbouncer
+auth_query = SELECT uname, phash from public.user_lookup($1);
+pool_mode = session
+max_client_conn = 1000
+default_pool_size = 200
+ignore_startup_parameters = extra_float_digits
+server_fast_close = 1
+
+# Log settings
+admin_users = {{ default (list .Values.pgbouncer.credentials.username) .Values.pgbouncer.admin_users | join "," }}
+stats_users = {{ default (list .Values.pgbouncer.credentials.username) .Values.pgbouncer.stats_users | join "," }}
+
+# Connection sanity checks, timeouts
+
+# TLS settings
+server_tls_sslmode = prefer
 {{- end -}}
 
 {{/* originally borrowed from https://github.com/zalando/spilo/blob/1.6-p2/postgres-appliance/scripts/post_init.sh */}}
@@ -83,6 +114,16 @@ BEGIN
         ALTER ROLE robot_zmon WITH NOCREATEDB NOLOGIN NOCREATEROLE NOSUPERUSER NOREPLICATION INHERIT;
     ELSE
         CREATE ROLE robot_zmon;
+    END IF;
+END;\$\$;
+
+DO \$\$
+BEGIN
+    PERFORM * FROM pg_catalog.pg_authid WHERE rolname = '{{ .Values.pgbouncer.credentials.username }}';
+    IF FOUND THEN
+        ALTER ROLE {{ .Values.pgbouncer.credentials.username }} WITH INHERIT LOGIN ENCRYPTED PASSWORD '{{ .Values.pgbouncer.credentials.password }}';
+    ELSE
+        CREATE ROLE {{ .Values.pgbouncer.credentials.username }} LOGIN ENCRYPTED PASSWORD '{{ .Values.pgbouncer.credentials.password }}';
     END IF;
 END;\$\$;
 
@@ -125,6 +166,19 @@ GRANT EXECUTE ON FUNCTION cron.schedule(text, text, text) TO admin;
 REVOKE EXECUTE ON FUNCTION cron.unschedule(bigint) FROM public;
 GRANT EXECUTE ON FUNCTION cron.unschedule(bigint) TO admin;
 GRANT USAGE ON SCHEMA cron TO admin;
+
+CREATE OR REPLACE FUNCTION public.user_lookup(in i_username text, out uname text, out phash text)
+RETURNS record
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS \$\$
+BEGIN
+    SELECT usename, passwd FROM pg_catalog.pg_shadow
+    WHERE usename = i_username AND usename != '{{ .Values.pgbouncer.credentials.username }}' INTO uname, phash;
+    RETURN;
+END;\$\$;
+REVOKE ALL ON FUNCTION public.user_lookup(text) FROM public, {{ .Values.pgbouncer.credentials.username }};
+GRANT EXECUTE ON FUNCTION public.user_lookup(text) TO {{ .Values.pgbouncer.credentials.username }};
 
 CREATE EXTENSION IF NOT EXISTS file_fdw SCHEMA public;
 DO \$\$
@@ -181,7 +235,7 @@ done
 
 cat _zmon_schema.dump
 
-PGVER=$(psql -d "$2" -XtAc "SELECT pg_catalog.current_setting('server_version_num')::int/10000")
+PGVER=$(psql -qbd "$2" -XtAc "SELECT pg_catalog.current_setting('server_version_num')::int/10000")
 if [ $PGVER -ge 12 ]; then RESET_ARGS="oid, oid, bigint"; fi
 
 [ -f "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}" ] && for i in $(cat "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}"); do
@@ -197,7 +251,7 @@ BEGIN
     END IF;
 END;\$\$;
 EOF
-done
+done ||:
 
 while IFS= read -r db_name; do
     echo "\c ${db_name}"
@@ -226,10 +280,25 @@ GRANT EXECUTE ON FUNCTION public.set_user(text) TO admin;
 GRANT EXECUTE ON FUNCTION public.pg_stat_statements_reset($RESET_ARGS) TO admin;"
     cat metric_helpers.sql
 done < <(psql -d "$2" -tAc 'select pg_catalog.quote_ident(datname) from pg_catalog.pg_database where datallowconn')
-) | psql -Xd "$2"
+) | psql -qbXd "$2"
+
+cat <<EOF | psql -d template1
+CREATE OR REPLACE FUNCTION public.user_lookup(in i_username text, out uname text, out phash text)
+RETURNS record
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS \$\$
+BEGIN
+    SELECT usename, passwd FROM pg_catalog.pg_shadow
+    WHERE usename = i_username AND usename != '{{ .Values.pgbouncer.credentials.username }}' INTO uname, phash;
+    RETURN;
+END;\$\$;
+REVOKE ALL ON FUNCTION public.user_lookup(text) FROM public, {{ .Values.pgbouncer.credentials.username }};
+GRANT EXECUTE ON FUNCTION public.user_lookup(text) TO {{ .Values.pgbouncer.credentials.username }};
+EOF
 
 [ -f "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}" ] && for i in $(cat "{{ default "/tmp/dbsUsers" (index .Values "dbsUsersMountpoint") | quote }}"); do
     DATABASE="$(echo ${i} | awk -F: '{print $1}')" USERNAME="$(echo ${i} | awk -F: '{print $2}')" PASSWORD="$(echo ${i} | awk -F: '{print $3}')"
-    [ $(psql --csv -t -c 'SELECT 1 FROM pg_catalog.pg_database WHERE datname = '\'${DATABASE}\'';' "$2" | wc -l) -gt 0 ] || psql -c 'CREATE DATABASE '${DATABASE}' OWNER '${USERNAME}' TEMPLATE '\''template0'\'' ENCODING '\''UTF8'\'' LC_COLLATE '\''en_US.UTF-8'\'' LC_CTYPE '\''en_US.UTF-8'\'';'
-done
+    [ $(psql -qbtA -c 'SELECT 1 FROM pg_catalog.pg_database WHERE datname = '\'${DATABASE}\'';' "$2" | wc -l) -gt 0 ] || psql -qb -c 'CREATE DATABASE '${DATABASE}' OWNER '${USERNAME}' ENCODING '\''UTF8'\'' LC_COLLATE '\''en_US.UTF-8'\'' LC_CTYPE '\''en_US.UTF-8'\'';'
+done ||:
 {{- end -}}
