@@ -51,6 +51,24 @@ spec:
         - name: storage-volume
           mountPath: "{{ .Values.persistentVolume.mountPath }}"
           subPath: "{{ .Values.persistentVolume.subPath }}"
+      - name: cert-perm-fix
+        image: "alpine:edge"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: tls-source
+          mountPath: /etc/tls/source
+          readOnly: true
+        - name: tls
+          mountPath: /etc/tls/destination
+        command:
+        - "/bin/sh"
+        - "-xc"
+        - |
+          cp /etc/tls/source/* /etc/tls/destination/
+          find /etc/tls/destination -type f -iname "*.crt" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0444 {}; chown 101 {}'
+          find /etc/tls/destination -type f -iname "*.key" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0400 {}; chown 101 {}'
+          exit 0
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -167,6 +185,14 @@ spec:
               fieldPath: metadata.namespace
         - name: PGROOT
           value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
+        {{- if or (and (.Capabilities.APIVersions.Has "cert-manager.io/v1") (index (default (dict) (index .Values.tls "issuerRef")) "name")) (and (not (index (default (dict) (index .Values.tls "issuerRef")) "name")) (index .Values.tls "ca") (index .Values.tls "crt") (index .Values.tls "key")) }}
+        - name: SSL_CA_FILE
+          value: /etc/pg-tls/ca.crt
+        - name: SSL_CERTIFICATE_FILE
+          value: /etc/pg-tls/tls.crt
+        - name: SSL_PRIVATE_KEY_FILE
+          value: /etc/pg-tls/tls.key
+        {{- end }}
         {{- if .Values.spiloConfiguration }}
         - name: SPILO_CONFIGURATION
           value: |
@@ -210,6 +236,9 @@ spec:
 */}}
         - mountPath: /etc/patroni
           name: patroni-config
+          readOnly: true
+        - name: tls
+          mountPath: /etc/pg-tls
           readOnly: true
         {{- if .Values.walE.enable }}
         {{- if .Values.walE.kubernetesSecret }}
@@ -339,6 +368,13 @@ spec:
           name: {{ template "patroni.fullname" . }}-initdb-conf-template
           optional: false
 +*/}}
+      - name: tls-source
+        secret:
+          secretName: {{ include "patroni.postgresql.tls.secret" . | quote }}
+          defaultMode: 0444
+          optional: {{ not (or (and (.Capabilities.APIVersions.Has "cert-manager.io/v1") (index (default (dict) (index .Values.tls "issuerRef")) "name")) (and (not (index (default (dict) (index .Values.tls "issuerRef")) "name")) (index .Values.tls "ca") (index .Values.tls "crt") (index .Values.tls "key")) (index .Values.tls "secretName")) }}
+      - name: tls
+        emptyDir: {}
       - name: patroni-config
         secret:
           secretName: {{ template "patroni.fullname" . }}
@@ -361,27 +397,27 @@ spec:
       {{- end }}
   {{- if .Values.persistentVolume.enabled }}
   volumeClaimTemplates:
-    - metadata:
-        name: storage-volume
-        annotations:
-        {{- if .Values.persistentVolume.annotations }}
-{{ toYaml .Values.persistentVolume.annotations | indent 8 }}
-        {{- end }}
-        labels:
-          app: {{ template "patroni.fullname" . }}
-          release: {{ template "patroni.hashedname" $ }}
-          heritage: {{ .Release.Service }}
-      spec:
-        accessModes:
-{{ toYaml .Values.persistentVolume.accessModes | indent 8 }}
-        resources:
-          requests:
-            storage: "{{ .Values.persistentVolume.size }}"
-      {{- if .Values.persistentVolume.storageClass }}
-      {{- if (eq "-" .Values.persistentVolume.storageClass) }}
-        storageClassName: ""
-      {{- else }}
-        storageClassName: "{{ .Values.persistentVolume.storageClass }}"
+  - metadata:
+      name: storage-volume
+      annotations:
+      {{- if .Values.persistentVolume.annotations }}
+{{ toYaml .Values.persistentVolume.annotations | indent 6 }}
       {{- end }}
-      {{- end }}
+      labels:
+        app: {{ template "patroni.fullname" . }}
+        release: {{ template "patroni.hashedname" $ }}
+        heritage: {{ .Release.Service }}
+    spec:
+      accessModes:
+{{ toYaml .Values.persistentVolume.accessModes | indent 6 }}
+      resources:
+        requests:
+          storage: "{{ .Values.persistentVolume.size }}"
+    {{- if .Values.persistentVolume.storageClass }}
+    {{- if (eq "-" .Values.persistentVolume.storageClass) }}
+      storageClassName: ""
+    {{- else }}
+      storageClassName: "{{ .Values.persistentVolume.storageClass }}"
+    {{- end }}
+    {{- end }}
   {{- end }}

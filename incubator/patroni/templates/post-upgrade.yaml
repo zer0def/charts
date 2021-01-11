@@ -61,8 +61,7 @@ roleRef:
   kind: Role
   name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
 ---
-
-
+{{- $pgbClientTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client") }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -99,7 +98,8 @@ data:
 
     # unpause (especially when not doing a version upgrade)
     for i in $(curl -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc/api/v1/namespaces/${MY_NAMESPACE}/endpoints/${STATIC_NAME} | python3 -c 'import json, sys; [print(i.get("ip")) for i in sum([i.get("addresses", []) for i in json.load(sys.stdin).get("subsets",[])], []) if i.get("ip")]'); do
-      PGPASSWORD="{{ .Values.pgbouncer.credentials.password }}" PGCONNECT_TIMEOUT=3 psql -w -U {{ .Values.pgbouncer.credentials.username }} -d pgbouncer -h ${i} -p 5432 -c 'RESUME;' ||:
+      # ref: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+      PGPASSWORD="{{ .Values.pgbouncer.credentials.password }}" psql -w "postgresql://{{ .Values.pgbouncer.credentials.username }}@${i}:5432/pgbouncer?connect_timeout=3&sslmode={{ default "prefer" (index $pgbClientTls "sslmode") }}&sslrootcert=/etc/pg-tls/ca.crt&sslcert=/etc/pg-tls/tls.crt&sslkey=/etc/pg-tls/tls.key" -c 'RESUME;' ||:
     done
 
     set +e
@@ -150,11 +150,19 @@ spec:
         - name: cleanup-script
           readOnly: true
           mountPath: /mnt
+        - name: tls
+          readOnly: true
+          mountPath: /etc/pg-tls
       volumes:
       - name: cleanup-script
         configMap:
           name: {{ template "patroni.fullname" $ }}-pgupgrade-cleanup
           optional: false
+      - name: tls
+        secret:
+          secretName: {{ include "patroni.pgbouncer.tls.clientSecret" . | quote }}
+          defaultMode: 0444
+          optional: true
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}

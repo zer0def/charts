@@ -148,6 +148,16 @@ serviceAccount:
 
 spiloConfiguration: {}
 
+tls:
+  secretName: ""
+  issuerRef:
+    name: ""
+    kind: ""
+  ca: ""
+  crt: ""
+  key: ""
+  sslmode: prefer
+
 pgbouncer:
   replicaCount: 1
   image:
@@ -161,6 +171,26 @@ pgbouncer:
   stats_users: []
   affinity: {}
   resources: {}
+  tls:
+    server:
+      secretName: ""
+      issuerRef:
+        name: ""
+        kind: ""
+      ca: ""
+      crt: ""
+      key: ""
+      # ref: https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
+      sslmode: prefer
+    client:
+      secretName: ""
+      issuerRef:
+        name: ""
+        kind: ""
+      ca: ""
+      crt: ""
+      key: ""
+      sslmode: prefer
 
 metrics:
   postgresql:

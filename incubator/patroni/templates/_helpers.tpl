@@ -52,7 +52,35 @@ Create the name of the service account to use.
 {{ end }}
 {{- end -}}
 
+{{- define "patroni.postgresql.tls.secret" -}}
+{{ default (printf "%s-pg-tls" (include "patroni.hashedname" .)) (index .Values.tls "secretName") }}
+{{- end -}}
+
+{{- define "patroni.pgbouncer.tls.serverSecret" -}}
+{{ default (printf "%s-pgb-server-tls" (include "patroni.fullname" .)) (index (default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "server")) "secretName") }}
+{{- end -}}
+
+{{- define "patroni.pgbouncer.tls.clientSecret" -}}
+{{ default (printf "%s-pgb-client-tls" (include "patroni.fullname" .)) (index (default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client")) "secretName") }}
+{{- end -}}
+
+{{/* unused, but may be of use in the future */}}
+{{- define "patroni.spiloConfiguration" -}}
+{{- $spiloConfig := .Values.spiloConfiguration -}}
+{{- if .Capabilities.APIVersions.Has "cert-manager.io/v1" -}}
+{{- if index (default (dict) (index .Values.tls "issuerRef")) "name" -}}
+{{- $spiloConfig = mergeOverwrite $spiloConfig (dict "bootstrap" (dict "dcs" (dict "postgresql" (dict "parameters" (dict "ssl" "on" "ssl_ca_file" "/etc/pg-tls/ca.crt" "ssl_cert_file" "/etc/pg-tls/tls.crt" "ssl_key_file" "/etc/pg-tls/tls.key"))))) -}}
+{{- end -}}
+{{- end -}}
+{{- if and (not (index (default (dict) (index .Values.tls "issuerRef")) "name")) (index .Values.tls "ca") (index .Values.tls "crt") (index .Values.tls "key") -}}
+{{- $spiloConfig = mergeOverwrite $spiloConfig (dict "bootstrap" (dict "dcs" (dict "postgresql" (dict "parameters" (dict "ssl" "on" "ssl_ca_file" "/etc/pg-tls/ca.crt" "ssl_cert_file" "/etc/pg-tls/tls.crt" "ssl_key_file" "/etc/pg-tls/tls.key"))))) -}}
+{{- end -}}
+{{ toYaml $spiloConfig }}
+{{- end -}}
+
 {{- define "patroni.pgbouncer" -}}
+{{- $pgbServerTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "server") }}
+{{- $pgbClientTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client") }}
 [databases]
 * = host={{ template "patroni.hashedname" . }}
 
@@ -73,10 +101,32 @@ server_fast_close = 1
 admin_users = {{ default (list .Values.pgbouncer.credentials.username) .Values.pgbouncer.admin_users | join "," }}
 stats_users = {{ default (list .Values.pgbouncer.credentials.username) .Values.pgbouncer.stats_users | join "," }}
 
-# Connection sanity checks, timeouts
-
-# TLS settings
-server_tls_sslmode = prefer
+{{- if .Capabilities.APIVersions.Has "cert-manager.io/v1" }}
+{{- if index (default (dict) (index $pgbServerTls "issuerRef")) "name" }}
+server_tls_ca_file = /etc/pgb-tls/server/ca.crt
+server_tls_key_file = /etc/pgb-tls/server/tls.key
+server_tls_cert_file = /etc/pgb-tls/server/tls.crt
+server_tls_sslmode = {{ default "prefer" (index $pgbServerTls "sslmode") }}
+{{- end }}
+{{- if index (default (dict) (index $pgbClientTls "issuerRef")) "name" }}
+client_tls_ca_file = /etc/pgb-tls/client/ca.crt
+client_tls_key_file = /etc/pgb-tls/client/tls.key
+client_tls_cert_file = /etc/pgb-tls/client/tls.crt
+client_tls_sslmode = {{ default "prefer" (index $pgbClientTls "sslmode") }}
+{{- end }}
+{{- end }}
+{{- if and (not (index (default (dict) (index $pgbServerTls "issuerRef")) "name")) (index $pgbServerTls "ca") (index $pgbServerTls "crt") (index $pgbServerTls "key") }}
+server_tls_ca_file = /etc/pgb-tls/server/ca.crt
+server_tls_key_file = /etc/pgb-tls/server/tls.key
+server_tls_cert_file = /etc/pgb-tls/server/tls.crt
+server_tls_sslmode = {{ default "prefer" (index $pgbServerTls "sslmode") }}
+{{- end }}
+{{- if and (not (index (default (dict) (index $pgbClientTls "issuerRef")) "name")) (index $pgbClientTls "ca") (index $pgbClientTls "crt") (index $pgbClientTls "key") }}
+client_tls_ca_file = /etc/pgb-tls/client/ca.crt
+client_tls_key_file = /etc/pgb-tls/client/tls.key
+client_tls_cert_file = /etc/pgb-tls/client/tls.crt
+client_tls_sslmode = {{ default "prefer" (index $pgbClientTls "sslmode") }}
+{{- end }}
 {{- end -}}
 
 {{/* originally borrowed from https://github.com/zalando/spilo/blob/1.6-p2/postgres-appliance/scripts/post_init.sh */}}
